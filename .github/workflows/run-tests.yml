@@ -1,0 +1,68 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test-api:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13', '3.14']
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Python environment
+        id: seed
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: ${{ matrix.python-version }}
+          database-path: app/server/test_dogshelter.db
+
+      - name: Run tests
+        working-directory: ./app/server
+        run: python -m unittest test_app -v
+        env:
+          DATABASE_PATH: ${{ steps.seed.outputs.database-file }}
+
+  test-e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Python environment
+        id: seed
+        uses: ./.github/actions/setup-python-env
+        with:
+          database-path: app/server/test_dogshelter.db
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: 'app/client/package-lock.json'
+
+      - name: Install Node dependencies
+        working-directory: ./app/client
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: ./app/client
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e tests
+        working-directory: ./app/client
+        run: npx playwright test
+        env:
+          DATABASE_PATH: ${{ steps.seed.outputs.database-file }}
+
